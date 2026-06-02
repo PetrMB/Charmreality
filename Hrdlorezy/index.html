@@ -657,12 +657,12 @@
 <div class="send-confirm" id="send-dialog">
   <div class="send-box">
     <h3>Odeslat výběr</h3>
-    <p>Váš výběr fotek a komentáře budou staženy jako soubor a otevře se e-mail na Petra. Přiložte stažený soubor k e-mailu.</p>
+    <p>Otevře se e-mail na Petra se seznamem vybraných fotek a vašimi pokyny k editaci.</p>
     <div class="send-actions">
-      <button class="btn-primary" id="send-confirm-btn">Stáhnout a odeslat</button>
+      <button class="btn-primary" id="send-confirm-btn">Odeslat e-mail</button>
       <button class="btn-secondary" id="send-cancel-btn">Zrušit</button>
     </div>
-    <div class="send-ok" id="send-ok">Soubor stažen — otevřete e-mail a přiložte ho.</div>
+    <div class="send-ok" id="send-ok">E-mail připraven — zkontrolujte a odešlete.</div>
   </div>
 </div>
 
@@ -914,30 +914,49 @@
     const state = getState();
     const selected = Object.entries(state).filter(([k,v]) => v.selected);
 
-    // Build readable summary for email body
-    let summary = 'Výběr fotek k editaci — Hrdlořezy\n\n';
-    summary += 'Vybráno: ' + selected.length + ' fotek\n\n';
-    selected.forEach(([name, data]) => {
-      summary += '• ' + name;
-      if (data.instructions) summary += ' — ' + data.instructions;
-      summary += '\n';
+    // Build readable list
+    let body = 'Výběr fotek k editaci — Hrdlořezy\n';
+    body += 'Vybráno: ' + selected.length + ' fotek\n\n';
+    selected.forEach(([name, data], i) => {
+      body += (i + 1) + '. ' + name + '\n';
+      if (data.instructions) {
+        body += '   Editace: ' + data.instructions + '\n';
+      } else {
+        body += '   (bez pokynů)\n';
+      }
+      body += '\n';
     });
-    summary += '\n---\nKompletní data jsou v přiloženém JSON souboru.';
 
-    // Download JSON
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const date = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = 'hrdlorezy-vyber-' + date + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    // Build JSON of selected only
+    const selectedState = {};
+    selected.forEach(([name, data]) => { selectedState[name] = data; });
+    const json = JSON.stringify(selectedState);
 
-    // Open mailto
+    body += '---\nData pro import (zkopíruj celý blok a ulož jako .json):\n\n';
+    body += json;
+
+    // Build mailto URL
     const subject = encodeURIComponent('Hrdlořezy — výběr fotek k editaci (' + selected.length + ')');
-    const body = encodeURIComponent(summary);
-    window.open('mailto:petr@honeger.com?subject=' + subject + '&body=' + body, '_self');
+    const mailto = 'mailto:petr@honeger.com?subject=' + subject + '&body=' + encodeURIComponent(body);
+
+    // Check URL length — fallback to clipboard if too long
+    if (mailto.length > 1800) {
+      navigator.clipboard.writeText(body).then(function() {
+        alert('Výběr je příliš velký pro mailto odkaz.\n\nText byl zkopírován do schránky — vložte ho do nového e-mailu na petr@honeger.com.');
+      }).catch(function() {
+        // Clipboard failed — try mailto without JSON
+        let shortBody = 'Výběr fotek k editaci — Hrdlořezy\nVybráno: ' + selected.length + ' fotek\n\n';
+        selected.forEach(([name, data], i) => {
+          shortBody += (i + 1) + '. ' + name;
+          if (data.instructions) shortBody += ' — ' + data.instructions;
+          shortBody += '\n';
+        });
+        const shortMailto = 'mailto:petr@honeger.com?subject=' + subject + '&body=' + encodeURIComponent(shortBody);
+        window.location.href = shortMailto;
+      });
+    } else {
+      window.location.href = mailto;
+    }
 
     // Show confirmation
     document.getElementById('send-ok').style.display = 'block';
