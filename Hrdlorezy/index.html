@@ -449,6 +449,114 @@
     font-weight: 500;
   }
 
+  .btn-send {
+    padding: 6px 14px;
+    border: 2px solid var(--gold-light);
+    border-radius: var(--radius);
+    background: var(--gold-light);
+    color: var(--green);
+    font-family: 'Jura', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+
+  .btn-send:hover {
+    background: var(--gold);
+    border-color: var(--gold);
+  }
+
+  .send-confirm {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(22,48,47,.92);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .send-confirm.open { display: flex; }
+
+  .send-box {
+    background: var(--ivory);
+    border-radius: var(--radius);
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .send-box h3 {
+    font-family: 'Italiana', serif;
+    font-size: 1.3rem;
+    color: var(--green);
+    margin-bottom: 12px;
+    font-weight: 400;
+  }
+
+  .send-box p {
+    color: var(--green);
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+    line-height: 1.5;
+    opacity: .8;
+  }
+
+  .send-box .send-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .send-box .btn-primary {
+    padding: 10px 24px;
+    background: var(--green);
+    color: var(--ivory);
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Jura', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background .2s;
+  }
+
+  .send-box .btn-primary:hover { background: var(--deep-green); }
+
+  .send-box .btn-secondary {
+    padding: 10px 24px;
+    background: transparent;
+    color: var(--green);
+    border: 1px solid var(--greige);
+    border-radius: var(--radius);
+    font-family: 'Jura', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+  }
+
+  .send-box .btn-secondary:hover { border-color: var(--green); }
+
+  .send-ok {
+    display: none;
+    color: var(--gold);
+    font-size: 0.85rem;
+    margin-top: 14px;
+    font-weight: 500;
+  }
+
   /* Hidden file input for import */
   #import-input { display: none; }
 
@@ -505,8 +613,9 @@
       </div>
     </div>
     <div class="top-actions">
-      <button class="btn-sm" id="btn-export">Exportovat stav</button>
-      <button class="btn-sm" id="btn-import">Importovat stav</button>
+      <button class="btn-send" id="btn-send">Odeslat výběr</button>
+      <button class="btn-sm" id="btn-export">Exportovat</button>
+      <button class="btn-sm" id="btn-import">Importovat</button>
       <input type="file" id="import-input" accept=".json">
     </div>
   </div>
@@ -541,6 +650,19 @@
         <span class="save-toast" id="save-toast">Uloženo!</span>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- SEND DIALOG -->
+<div class="send-confirm" id="send-dialog">
+  <div class="send-box">
+    <h3>Odeslat výběr</h3>
+    <p>Váš výběr fotek a komentáře budou staženy jako soubor a otevře se e-mail na Petra. Přiložte stažený soubor k e-mailu.</p>
+    <div class="send-actions">
+      <button class="btn-primary" id="send-confirm-btn">Stáhnout a odeslat</button>
+      <button class="btn-secondary" id="send-cancel-btn">Zrušit</button>
+    </div>
+    <div class="send-ok" id="send-ok">Soubor stažen — otevřete e-mail a přiložte ho.</div>
   </div>
 </div>
 
@@ -766,6 +888,59 @@
     };
     reader.readAsText(file);
     this.value = '';
+  });
+
+  // --- Send ---
+  document.getElementById('btn-send').addEventListener('click', function() {
+    const state = getState();
+    const selected = Object.entries(state).filter(([k,v]) => v.selected);
+    if (selected.length === 0) {
+      alert('Nemáte žádné vybrané fotky k odeslání.');
+      return;
+    }
+    document.getElementById('send-ok').style.display = 'none';
+    document.getElementById('send-dialog').classList.add('open');
+  });
+
+  document.getElementById('send-cancel-btn').addEventListener('click', function() {
+    document.getElementById('send-dialog').classList.remove('open');
+  });
+
+  document.getElementById('send-dialog').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+
+  document.getElementById('send-confirm-btn').addEventListener('click', function() {
+    const state = getState();
+    const selected = Object.entries(state).filter(([k,v]) => v.selected);
+
+    // Build readable summary for email body
+    let summary = 'Výběr fotek k editaci — Hrdlořezy\n\n';
+    summary += 'Vybráno: ' + selected.length + ' fotek\n\n';
+    selected.forEach(([name, data]) => {
+      summary += '• ' + name;
+      if (data.instructions) summary += ' — ' + data.instructions;
+      summary += '\n';
+    });
+    summary += '\n---\nKompletní data jsou v přiloženém JSON souboru.';
+
+    // Download JSON
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = 'hrdlorezy-vyber-' + date + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // Open mailto
+    const subject = encodeURIComponent('Hrdlořezy — výběr fotek k editaci (' + selected.length + ')');
+    const body = encodeURIComponent(summary);
+    window.open('mailto:petr@honeger.com?subject=' + subject + '&body=' + body, '_self');
+
+    // Show confirmation
+    document.getElementById('send-ok').style.display = 'block';
   });
 
   // --- Init ---
